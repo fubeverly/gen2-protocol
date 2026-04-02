@@ -1,0 +1,265 @@
+---
+title: "Example Fig X Final"
+output: html_notebook
+---
+
+The following script includes analysis for XX.
+
+Beverly Fu
+
+```{r Standard Setup}
+# Configure directories, load libraries and base functions
+source(paste0(here::here(), "/0-config.R"))
+
+directory = paste0(here(), "/3-figures/")
+
+output <- setup_tables(paste0(here(), "/1-data/DADA2_Example/"), '/1-data/Example-sample-info.xlsx')
+ps <- output$ps # phyloseq object
+taxa_order <- output$taxa_order # ASV plot order
+samdf <- output$samdf # sample information
+samdf$Sample <- rownames(samdf)
+
+total_reads <- as.data.frame(sample_sums(ps)) # get total number of reads
+colnames(total_reads) <- "total_reads"
+total_reads$Sample <- rownames(total_reads)
+
+# Add read counts
+samdf <- samdf %>%
+  left_join(total_reads, by = "Sample") %>%
+  mutate(total_reads = ifelse(is.na(total_reads), 0, total_reads))
+
+#######################################
+# Variables to change
+#######################################
+
+set_ordered_factors <- function(df2plot) {
+  # Set default ordered factors in dataframe
+  df2plot <- df2plot %>%
+    mutate(Diet = factor(Diet, levels = c("SD", "MD"), ordered = TRUE)) %>%
+    mutate(Antibiotics = factor(Antibiotics, levels = c("Pre", "ABX", "Post"), ordered = TRUE))
+  return(df2plot)
+}
+
+cutoff_SI <- 0.001 # Supplementary Info ASV cutoff
+cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
+```
+
+#######################################
+# Fig. 1: Sequencer statistics
+#######################################
+
+```{r Example-Fig1}
+num_zeros <- sum(samdf$total_reads == 0)
+num_samples <- sum(samdf$total_reads >= 0)
+
+g <- ggplot(samdf, aes(x = log10(total_reads), fill = Mouse)) + 
+  geom_histogram(bins = 25, color = "black", linewidth = 0.2) +
+  facet_grid(cols = vars(Diet)) +
+  scale_x_continuous("log10(reads)", limits = c(0, NA), breaks = c(0, 1, 2, 3, 4, 5, 6)) +
+  labs(x = "log10(reads)", y = "Counts", subtitle = paste0(num_zeros, " of ", num_samples, " samples have 0 reads.")) + 
+  ggtitle("Read distribution") +
+  theme_custom_text() +
+  theme(aspect.ratio = 1,
+        legend.text = element_text(size = 6),  # Legend text size
+        legend.key.size = unit(0.3, "cm"))
+
+ggsave(paste0(directory, "Example-Fig1/Fig1A.pdf"), plot = g, device = "pdf", width = 4, height = 4)
+
+g <- ggplot(samdf, aes(x = log10(total_reads), fill = Antibiotics)) + 
+  geom_histogram(bins = 25, color = "black", linewidth = 0.2) +
+  facet_grid(cols = vars(Diet)) +
+  scale_x_continuous("log10(reads)", limits = c(0, NA), breaks = c(0, 1, 2, 3, 4, 5, 6)) +
+  labs(x = "log10(reads)", y = "Counts", subtitle = paste0(num_zeros, " of ", num_samples, " samples have 0 reads.")) + 
+  ggtitle("Read distribution") +
+  theme_custom_text() +
+  theme(aspect.ratio = 1,
+        legend.text = element_text(size = 6),  # Legend text size
+        legend.key.size = unit(0.3, "cm"))
+
+ggsave(paste0(directory, "Example-Fig1/Fig1B.pdf"), plot = g, device = "pdf", width = 4, height = 4)
+```
+
+#######################################
+# Fig. 2: Composition
+#######################################
+
+```{r Example-Fig2}
+
+ps2plot <- ps %>% subset_samples(total_reads > 10000
+                                 & Sample_type != "SIC")
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
+    filter(Abundance > cutoff_MT)
+  
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
+    transform_sample_counts(function(x) x/sum(x)) # renomalize
+  
+df2plot <- psmelt(ps2plot) # convert to long form
+df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
+df2plot <- set_ordered_factors(df2plot) # set ordered factors
+
+family2_scale <- get_color_mapping(df2plot) # legend colors
+
+for (mouse in unique(samdf$Mouse)) {
+    
+    diet <- samdf %>%
+        filter(Mouse == mouse) %>%
+        pull(Diet) %>%
+        unique()
+
+    g <- ggplot(df2plot %>% filter(Mouse == mouse), aes(x = Day, y = Abundance, fill = Family2)) + 
+         geom_bar(aes(x = Day), position = "stack", stat = "identity", color = "black", linewidth = 0.25) + 
+         scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+         scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+         facet_nested(cols = vars(Antibiotics), scales = "free", space = "free") +
+         labs(subtitle = paste0("Mouse: ", mouse, " Diet: ", diet)) +
+         theme_custom_comp() +
+         theme_custom_text() +
+         theme(axis.text.x = element_text(angle = 90))
+    
+    ggsave(paste0(directory, "/Example-Fig2/Fig2-Composition-Mouse-", mouse, ".pdf"), plot = g, device = "pdf", width = 6, height = 2)
+}
+ 
+g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) + 
+     geom_bar(aes(x = 1), position = "stack", stat = "identity", color = "black", linewidth = 0.25) + 
+     scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+     scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+     theme(legend.text = element_text(size = 5),  # Legend text size
+           legend.key.size = unit(0.2, "cm")) +
+     guides(fill = guide_legend(ncol = 3, byrow = FALSE)) + # Legend columns, fill legend items by column
+     labs(fill = "Family") + # Change legend label
+     theme_custom_text()
+
+legend <- get_legend(g)
+
+ggsave(paste0(directory, "/Example-Fig2/Fig2_legend.pdf"), plot = legend, device = "pdf", width = 6, height = 5)
+
+```
+
+#######################################
+# Fig. 3: ASV heatmap
+#######################################
+
+```{r Example-Fig3}
+
+for (mouse in unique(samdf$Mouse)) {
+    
+    diet <- samdf %>%
+        filter(Mouse == mouse) %>%
+        pull(Diet) %>%
+        unique()
+   
+    ps2plot <- ps %>% subset_samples(Mouse == mouse 
+                                     & total_reads > 10000
+                                     & Sample_type != "SIC")
+    
+    taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
+      filter(Abundance > 0.01)
+    
+    ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep 
+      transform_sample_counts(function(x) x/sum(x)) # renormalize
+    
+    df2plot <- psmelt(ps2plot) # convert to long form
+    df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
+    df2plot <- set_ordered_factors(df2plot) # set ordered factors
+
+    g <- ggplot(df2plot) +
+         geom_tile(aes(x = Day, y = interaction(Feature, Taxon), fill = log10(Abundance))) +
+         scale_fill_gradient(low = "white", high = "blue", na.value = "black", limits = c(-3, 0)) +
+         scale_x_discrete(labels = function(x) sub("\\..*$", "", x)) + 
+         facet_nested(cols = vars(Antibiotics), space = "free", scales = "free") +
+         theme(strip.text.y = element_blank(),
+               axis.title.x = element_blank(),
+               axis.title.y = element_blank(),
+               axis.ticks.y = element_blank(),
+               axis.text.x = element_text(angle = 0),
+               axis.ticks.x = element_blank()) +
+         theme_custom_text() +
+      theme(aspect.ratio = 1,
+            axis.text.x = element_text(angle = 90))
+    
+    ggsave(paste0(directory, "/Example-Fig3/Fig3-ASV-Mouse-", mouse, ".pdf"), plot = g, device = "pdf", width = 10, height = 0.15*(length(unique(df2plot$Feature))+3))
+}
+
+```
+
+#######################################
+# Fig. 4: Weighted unifrac PCoA
+#######################################
+
+```{r Example-Fig4}
+
+set.seed(100) # Consistent pcoa
+ps2ordinate <- ps %>% subset_samples(total_reads > 10000 & Sample_type != "SIC") # Choose which samples you want to ordinate
+otu_table_ps <- otu_table(ps2ordinate)
+
+otu_table_ps_clean <- otu_table_ps[rowSums(otu_table_ps) > 0, ] # Remove rows with all zeros (empty OTU rows)
+otu_table_ps_clean <- otu_table_ps_clean[rowSums(otu_table_ps_clean > 0) >= 3, ] # Remove OTUs present in < 3 samples
+
+retained_otus <- taxa_names(otu_table_ps_clean)
+
+# Subset all components accordingly
+ps_clean <- merge_phyloseq(
+  otu_table(otu_table_ps_clean),
+  sample_data(ps),
+  tax_table(ps)[retained_otus, ],
+  phy_tree(ps)
+)
+
+ps_clean <- prune_taxa(retained_otus, ps_clean)
+
+pcoa_weighted <- ordinate(ps_clean, method = "MDS", distance = "wunifrac")
+ordination_data <- merge(pcoa_weighted$vectors, samdf, by.x = "row.names", by.y = "Name")
+var_exp <- get_evals(pcoa_weighted)$variance_exp # variances
+
+x_range <- range(ordination_data$Axis.1)
+y_range <- range(ordination_data$Axis.2)
+aspect_ratio <- diff(x_range) / diff(y_range)
+
+ordination_data <- set_ordered_factors(ordination_data) # set ordered factors
+
+lines_df <- ordination_data %>%
+   arrange(Day)  # Ensures correct order within Kit_ID
+
+colors_day <- turbo(length(unique(samdf$Day)), begin = 0.05, end = 0.95, direction = -1) # Define colors
+
+####
+
+g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = Day, shape = Antibiotics)) +
+     geom_path(data = lines_df, aes(group = Mouse), color = "gray60", linewidth = 0.6, lineend = "round") +  # Connect points
+     geom_point(size = 3, stroke = 0.5, color = "black") +
+     scale_shape_manual(values = c("Pre" = 21, "ABX"  = 22, "Post" = 23)) +
+     scale_fill_manual(values = colors_day) +
+     guides(fill  = "none") + # Fill legend
+     force_panelsizes(rows =  unit(c(5, 5, 5, 5), "cm"), 
+                     cols = unit(c(5, 5, 5, 5), "cm"), 
+                     TRUE) +
+     labs(title = "Weighted unifrac",
+          x = paste0("PCo1 ", round(var_exp[1],2), "%"),
+          y = paste0("PCo2 ", round(var_exp[2],2), "%")) +
+     theme_custom_text() +
+     coord_fixed(ratio = aspect_ratio)  # Force square axes
+
+ggsave(paste0(directory, "/Example-Fig4/Fig4A.pdf"), plot = g, device = "pdf", width = 4, height = 3)
+
+
+g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = Day, shape = Antibiotics)) +
+     geom_path(data = lines_df, aes(group = Mouse), color = "gray60", linewidth = 0.6, lineend = "round") +  # Connect points
+     geom_point(size = 3, stroke = 0.5, color = "black") +
+     scale_shape_manual(values = c("Pre" = 21, "ABX"  = 22, "Post" = 23)) +
+     scale_fill_manual(values = colors_day) +
+     guides(fill  = "none") + # Fill legend
+     facet_wrap(~Mouse, ncol = 3) +
+     force_panelsizes(rows =  unit(c(3, 3, 3, 3), "cm"), 
+                     cols = unit(c(3, 3, 3, 3), "cm"), 
+                     TRUE) +
+     labs(title = "Weighted unifrac",
+          x = paste0("PCo1 ", round(var_exp[1],2), "%"),
+          y = paste0("PCo2 ", round(var_exp[2],2), "%")) +
+     theme_custom_text() +
+     coord_fixed(ratio = aspect_ratio)  # Force square axes
+
+ggsave(paste0(directory, "/Example-Fig4/Fig4B.pdf"), plot = g, device = "pdf", width = 6, height = 8)
+
+```
+

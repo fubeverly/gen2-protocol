@@ -1,5 +1,5 @@
 ---
-title: "Example Fig X Final"
+title: "Spatial Seq Final"
 output: html_notebook
 ---
 
@@ -13,7 +13,7 @@ source(paste0(here::here(), "/0-config.R"))
 
 directory = paste0(here(), "/3-figures/")
 
-output <- setup_tables(paste0(here(), "/1-data/DADA2_Example/"), '/1-data/Example-sample-info.xlsx')
+output <- setup_tables(paste0(here(), "/1-data/DADA2_SILVA/"), '/1-data/Spatial-seq-sample-info.xlsx')
 ps <- output$ps # phyloseq object
 taxa_order <- output$taxa_order # ASV plot order
 samdf <- output$samdf # sample information

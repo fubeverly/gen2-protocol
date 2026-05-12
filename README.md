@@ -5,7 +5,9 @@ Repository accompanying the manuscript "Multi-region sampling of the human small
 ## Description
 This repository includes data and replication files to reproduce the analyses in the manuscript:
 
-Beverly Fu, Leila Bronnert DeSchepper, Jiawei Sun, Saria A. McKeithen-Mead, Bennett Kapili, Pablo Ochoa-Andersen, Sean Paul Spencer, Touran Fardeen, Maya Ricardo, Vanessa El Kamari, Sidhartha Sinha, David A. Relman, Jessica A. Grembi, Dari Shalon, Sylvie Estrela<sup>&dagger;</sup>, Kerwyn Casey Huang<sup>&dagger;</sup>. "Multi-region sampling of the human small intestine using an ingestible device", TBD. 
+Beverly Fu, Leila Bronnert DeSchepper, Jiawei Sun, Saria A. McKeithen-Mead, Bennett Kapili, Pablo Ochoa-Andersen, Sean Paul Spencer, Touran Fardeen, Maya Ricardo, Vanessa El Kamari, Sidhartha Sinha, David A. Relman, Jessica A. Grembi, Dari Shalon, Sylvie Estrela&dagger;, Kerwyn Casey Huang&dagger;. "Multi-region sampling of the human small intestine using an ingestible device", TBD. 
+
+&dagger;: Co-corresponding authors.
 
 Description of folders:
 - The configuration **0-config.R** file lists all R packages that need to be installed prior to running the code. It also contains custom functions.

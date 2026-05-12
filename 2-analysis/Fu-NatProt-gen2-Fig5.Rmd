@@ -1,0 +1,251 @@
+---
+title: "NatProt CapScan Gen2 Fig 5 FINAL"
+output: html_notebook
+---
+
+The following script includes analysis for XX.
+
+Beverly Fu
+
+```{r Standard Setup}
+# Configure directories, load libraries and base functions
+source(paste0(here::here(), "/0-config.R"))
+
+directory = paste0(here(), "/3-figures/")
+
+output <- setup_tables(paste0(here(), "/1-data/DADA2_output/"), '/1-data/Spatial-seq-sample-info.xlsx')
+ps <- output$ps # phyloseq object
+taxa_order <- output$taxa_order # ASV plot order
+samdf <- output$samdf # sample information
+samdf$Sample <- rownames(samdf)
+
+total_reads <- as.data.frame(sample_sums(ps)) # get total number of reads
+colnames(total_reads) <- "total_reads"
+total_reads$Sample <- rownames(total_reads)
+
+# Add read counts
+samdf <- samdf %>%
+  left_join(total_reads, by = "Sample") %>%
+  mutate(total_reads = ifelse(is.na(total_reads), 0, total_reads))
+
+#######################################
+# Variables to change
+#######################################
+
+set_ordered_factors <- function(df2plot) {
+  # Set default ordered factors in dataframe
+  df2plot <- df2plot %>%
+    mutate(Region = factor(Region, levels = c("saliva", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "stool"), ordered = TRUE)) %>%
+    mutate(Sample_origin = factor(Sample_origin, levels = c("saliva", "capscan", "stool"), ordered = TRUE))
+  return(df2plot)
+}
+
+cutoff_SI <- 0.001 # Supplementary Info ASV cutoff
+cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
+
+colors_pH = c("<5.5" = "#F4C2C2", "5.5" = "#d2c119", "5.8" = "#bdb016", "6" = "#b0a515", "6.2" = "#97971d", "6.4" = "#82881c", "6.6" = "#747a18", "6.8" = "#5c741e", "7" = "#4c681b", "NM" = "grey80")
+
+colors_origin <- c("saliva" = "#A2FC3CFF", "blood" = "#FE932AFF", nasal = "#1FC9DDFF", "cap" = "#A31301FF", "capscan" = "#A31301FF", "R1" = "#A31301FF", "R2" = "#B22222", "R3" = "#D96A57" , "R4" = "#EDA192", "stool" = "#3E378FFF")
+```
+
+#######################################
+# Fig. 5C: pH and CFU
+#######################################
+
+```{r Fig 5C}
+
+CFU <- read_excel(paste0(here(), "/1-data/Spatial-seq-CFU.xlsx"), sheet = 1) %>%
+  dplyr::slice(1:29) %>%
+  mutate(CFU_mL = as.numeric(CFU_mL)) %>%
+  filter(Subject %in% c("KD39", "KD40"))
+
+CFU <- CFU %>% mutate(Subject = recode(Subject, "KD39" = "Subject 1",
+                                         "KD40" = "Subject 2"))
+
+g <- ggplot(CFU, aes(x = Region, y = log10(CFU_plot), fill = pH)) +
+     geom_bar(stat = "identity", color = "black", linewidth = 0.25) +
+     scale_fill_manual(values = colors_pH) +
+     scale_y_log10() +
+     facet_wrap(~Subject, ncol = 1, scales = "free") +
+     scale_y_continuous(breaks = c(3, 7, 11), labels = scales::label_math(10^.x)) +  # 10^10 format
+     labs(y = expression(log[10](CFU/mL))) +
+     theme_custom_comp() +
+     theme(axis.text.x = element_text(angle = 0)) +
+     theme_custom_text()
+
+ggsave(paste0(directory, "Fig5/Fig5C.pdf"), plot = g, device = "pdf", width = 2.2, height = 2.5)
+```
+
+#######################################
+# Fig. 5D: Composition
+#######################################
+
+```{r Fig 5D}
+
+ps2plot <- ps %>% subset_samples(Kit_ID %in% c("KD039", "KD040") 
+                                 & total_reads > 400)
+
+taxa2keep <- psmelt(ps2plot %>% transform_sample_counts(function(x) x/sum(x))) %>% # convert to relative abundance
+    filter(Abundance > cutoff_MT)
+  
+ps2plot <- prune_taxa(taxa2keep$OTU, ps2plot) %>%  # keep ASVs in taxa2keep
+    transform_sample_counts(function(x) x/sum(x)) # renomalize
+  
+df2plot <- psmelt(ps2plot) # convert to long form
+df2plot <- set_family_order(df2plot, taxa_order) # set Family2 order
+df2plot <- set_ordered_factors(df2plot) # set ordered factors
+  
+family2_scale <- get_color_mapping(df2plot) # legend colors
+
+df2plot <- df2plot %>% mutate(Kit_ID = recode(Kit_ID, "KD039" = "Subject 1",
+                                         "KD040" = "Subject 2"))
+
+g <- ggplot(df2plot, aes(x = Region, y = Abundance, fill = Family2)) + 
+         geom_bar(position = "stack", stat = "identity", color = "black", linewidth = 0.1) +
+         scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+         scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+         facet_nested(cols = vars(Kit_ID, Sample_origin), scales = "free", space = "free") +
+         theme(panel.grid.major = element_blank(),      # Remove major grid lines
+           panel.grid.minor = element_blank()) +
+         theme_custom_text() +
+         theme_custom_comp() +  
+         theme(axis.text.x = element_text())
+
+ggsave(paste0(directory, "Fig5/Fig5D.pdf"), plot = g, device = "pdf", width = 4, height = 1.8)
+
+g <- ggplot(df2plot, aes(x = 1, y = Abundance, fill = Family2)) +
+     geom_bar(aes(x = 1), position = "stack", stat = "identity", color = "black", linewidth = 0.25) +
+     scale_y_continuous("Relative Abundance", breaks = c(0.00, 0.25, 0.50, 0.75, 1.00)) +
+     scale_fill_manual(values = family2_scale$values, breaks = family2_scale$breaks, labels = family2_scale$labels) +
+     theme(legend.text = element_text(size = 5),  # Legend text size
+           legend.key.size = unit(0.2, "cm")) +
+     guides(fill = guide_legend(ncol = 3, byrow = FALSE)) + # Legend columns, fill legend items by column
+     labs(fill = "Family") + # Change legend label
+     theme_custom_text()
+
+legend <- get_legend(g)
+
+ggsave(paste0(directory, "Fig5/Fig5D_legend.pdf"), plot = legend, device = pdf, width = 6, height = 5)
+
+```
+
+#######################################
+# Fig. 5E: Weighted unifrac PCoA
+#######################################
+
+```{r Fig 5E}
+
+set.seed(100) # Consistent pcoa
+ps2ordinate <-  ps %>% subset_samples(Kit_ID %in% c("KD039", "KD040")
+                                      & total_reads > 400)
+otu_table_ps <- otu_table(ps2ordinate)
+
+otu_table_ps_clean <- otu_table_ps[rowSums(otu_table_ps) > 0, ] # Remove rows with all zeros (empty OTU rows)
+otu_table_ps_clean <- otu_table_ps_clean[rowSums(otu_table_ps_clean > 0) >= 3, ] # Remove OTUs present in < 3 samples
+
+retained_otus <- taxa_names(otu_table_ps_clean)
+
+# Subset all components accordingly
+ps_clean <- merge_phyloseq(
+  otu_table(otu_table_ps_clean),
+  sample_data(ps),
+  tax_table(ps)[retained_otus, ],
+  phy_tree(ps)
+)
+
+ps_clean <- prune_taxa(retained_otus, ps_clean)
+
+pcoa_weighted <- ordinate(ps_clean, method = "MDS", distance = "wunifrac")
+ordination_data <- merge(pcoa_weighted$vectors, samdf, by.x = "row.names", by.y = "Sample")
+var_exp <- get_evals(pcoa_weighted)$variance_exp # variances
+
+x_range <- range(ordination_data$Axis.1)
+y_range <- range(ordination_data$Axis.2)
+aspect_ratio <- diff(x_range) / diff(y_range)
+
+ordination_data <- set_ordered_factors(ordination_data) # set ordered factors
+
+g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = Sample_origin, shape = Kit_ID)) +
+     geom_point(size = 2, stroke = 0.5, color = "black") +
+     scale_fill_manual(values = colors_origin) +
+     scale_shape_manual(values = c("KD039" = 21, "KD040" = 23)) +
+     guides(fill = guide_legend(override.aes = list(shape = 21))) + # Fill legend
+     labs(x = paste0("PCo1 (", round(var_exp[1], 1), "%)"),
+          y = paste0("PCo2 (", round(var_exp[2], 1), "%)")) +
+     coord_fixed(ratio = aspect_ratio)  + # Force square axes
+     theme_custom_text() +
+     theme(legend.position = "none") # no legend
+
+ggsave(paste0(directory, "Fig5/Fig5E.pdf"), plot = g, device = "pdf", width = 2, height = 1.8)
+
+g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = Sample_origin, shape = Kit_ID)) +
+     geom_point(size = 2, stroke = 0.5, color = "black") +
+     scale_fill_manual(values = colors_origin) +
+     scale_shape_manual(values = c("KD039" = 21, "KD040" = 23)) +
+     guides(fill = guide_legend(override.aes = list(shape = 21))) + # Fill legend
+     labs(x = paste0("PCo1 (", round(var_exp[1], 1), "%)"),
+          y = paste0("PCo2 (", round(var_exp[2], 1), "%)")) +
+     coord_fixed(ratio = aspect_ratio)  + # Force square axes
+     theme_custom_text()
+
+legend <- get_legend(g)
+
+ggsave(paste0(directory, "Fig5/Fig5E_legend.pdf"), plot = legend, device = "pdf", width = 4, height = 2)
+```
+
+#######################################
+# Fig. 5F: Microscopy cell count live dead
+#######################################
+
+```{r Fig 5F}
+
+CFU <- read_excel(paste0(here(), "/1-data/Spatial-seq-CFU.xlsx"), sheet = 1) %>%
+  dplyr::slice(1:29) %>%
+  mutate(CFU_mL = as.numeric(CFU_mL)) %>%
+  filter(Subject %in% c("KD39", "KD40"))
+
+CFU <- CFU %>% mutate(Subject = recode(Subject, "KD39" = "Subject 1",
+                                         "KD40" = "Subject 2"))
+
+g <- ggplot(CFU, aes(x = log10(Avg_cell_count), y = Avg_live_percent, fill = Sample_origin, shape = Subject)) +
+     geom_point(color = "black", size = 2, stroke = 0.5) +
+     geom_text_repel(data = subset(CFU, Sample_origin == "capscan"), 
+                aes(label = Region), 
+                size = 2,
+                max.overlaps = 20,
+                seed = 123) +
+     scale_shape_manual(values = c("Subject 1" = 21, "Subject 2" = 23)) +
+     facet_grid(cols = vars(Subject)) +
+     scale_fill_manual(values = colors_origin) +
+     scale_y_continuous() +
+     labs(x = "Cell count", y = "Percent alive") +
+     scale_x_continuous(breaks = 6:10, labels = scales::label_math(10^.x)) +  # 10^10 format
+     theme(axis.text.x = element_text(angle = 0),
+           legend.position = "none") +
+     theme_custom_text() +
+     theme(aspect.ratio = 1)
+
+ggsave(paste0(directory, "Fig5/Fig5F.pdf"), plot = g, device = "pdf", width = 3, height = 1.8)
+
+g <- ggplot(CFU, aes(x = log10(Avg_cell_count), y = Avg_live_percent, fill = Sample_origin, shape = Subject)) +
+     geom_point(color = "black", size = 2, stroke = 0.5) +
+     geom_text_repel(data = subset(CFU, Sample_origin == "capscan"), 
+                aes(label = Region), 
+                size = 2,
+                max.overlaps = 20,
+                seed = 123) +
+     scale_shape_manual(values = c("Subject 1" = 21, "Subject 2" = 23)) +
+     facet_grid(cols = vars(Subject)) +
+     scale_fill_manual(values = colors_origin) +
+     scale_y_continuous() +
+     labs(x = "Cell count", y = "Percent live") +
+     scale_x_continuous(labels = scales::label_math(10^.x)) +  # 10^10 format
+     theme(axis.text.x = element_text(angle = 0)) +
+     guides(fill = guide_legend(override.aes = list(shape = 21))) + # Fill legend
+     theme_custom_text() +
+     theme(aspect.ratio = 1)
+legend <- get_legend(g)
+
+ggsave(paste0(directory, "Fig5/Fig5F_legend.pdf"), plot = legend, device = pdf, width = 3, height = 3)
+
+```

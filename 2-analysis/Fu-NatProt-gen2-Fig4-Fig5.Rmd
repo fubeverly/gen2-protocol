@@ -1,9 +1,9 @@
 ---
-title: "NatProt CapScan Gen2 Fig 5 FINAL"
+title: "NatProt CapScan Gen2 Fig 4 and 5 FINAL"
 output: html_notebook
 ---
 
-The following script includes analysis for XX.
+The following script includes analysis for cell quantification and spatial sequencing.
 
 Beverly Fu
 
@@ -46,6 +46,32 @@ cutoff_MT <- 0.01 # Main Text ASV cutoff (to minimize legend)
 colors_pH = c("<5.5" = "#F4C2C2", "5.5" = "#d2c119", "5.8" = "#bdb016", "6" = "#b0a515", "6.2" = "#97971d", "6.4" = "#82881c", "6.6" = "#747a18", "6.8" = "#5c741e", "7" = "#4c681b", "NM" = "grey80")
 
 colors_origin <- c("saliva" = "#A2FC3CFF", "blood" = "#FE932AFF", nasal = "#1FC9DDFF", "cap" = "#A31301FF", "capscan" = "#A31301FF", "R1" = "#A31301FF", "R2" = "#B22222", "R3" = "#D96A57" , "R4" = "#EDA192", "stool" = "#3E378FFF")
+```
+
+#######################################
+# Fig. 4B: Microscopy vs spike-in
+#######################################
+
+```{r Fig 4B}
+
+microscopy <- read_excel(paste0(here(), "/1-data/Microscopy-quant.xlsx"), sheet = 1) %>%
+  filter(!is.na(SLIP_cell_p_mL) & !is.na(Spike_in_cell_p_mL)) %>%
+  mutate(Prediction = factor(Prediction, levels = c("saliva", "stomach", "proximal SI", "colon", "stool")))
+
+colors_prediction <- c("saliva" = "#A2FC3CFF", "stomach" = "#FE932AFF", "proximal SI" = "#A31301FF", "colon" = "#D96A57", "stool" = "#3E378FFF")
+
+g <- ggplot(microscopy, aes(x = log10(Spike_in_cell_p_mL), y = log10(SLIP_cell_p_mL), fill = Prediction)) +
+     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +  # y = x line
+     geom_point(shape = 21, size = 2) +
+     scale_fill_manual(values = colors_prediction) +
+     scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10), labels = scales::label_math(10^.x), limits = c(0, NA)) +  # 10^10 format
+     scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10), labels = scales::label_math(10^.x), limits = c(0, NA)) +  # 10^10 format
+     labs(y = "Imaging estimation (cells/mL)", x = "Spike-in metagenomics estimation (cells/mL)") +
+     theme_custom_text() +
+     theme(aspect.ratio = 1)
+
+ggsave(paste0(directory, "Fig4/Fig4B.pdf"), plot = g, device = "pdf", width = 3.2, height = 2.5)
+
 ```
 
 #######################################
@@ -169,6 +195,11 @@ g <- ggplot(ordination_data, aes(x = Axis.1, y = Axis.2, fill = Sample_origin, s
      geom_point(size = 2, stroke = 0.5, color = "black") +
      scale_fill_manual(values = colors_origin) +
      scale_shape_manual(values = c("KD039" = 21, "KD040" = 23)) +
+     geom_text_repel(data = subset(ordination_data, Sample_origin == "capscan"), 
+                aes(label = Region), 
+                size = 2,
+                max.overlaps = 20,
+                seed = 123) +
      guides(fill = guide_legend(override.aes = list(shape = 21))) + # Fill legend
      labs(x = paste0("PCo1 (", round(var_exp[1], 1), "%)"),
           y = paste0("PCo2 (", round(var_exp[2], 1), "%)")) +

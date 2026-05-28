@@ -3,26 +3,6 @@
 
 rm(list=ls()) # clear environmental variables
 
-# Vector of required packages
-packages <- c(
-  "here", "dplyr", "tidyverse", "ggplot2", "ggh4x", "cowplot", "viridis",
-  "phyloseq", "readxl", "writexl", "data.table", "ggbeeswarm", "ggpubr",
-  "rstatix", "factoextra", "MicrobiomeStat", "foreach", "ggrepel",
-  "scales", "ggbreak", "Hmisc", "ggtext", "readr", "purrr", "tidyr",
-  "pheatmap", "stringr", "see"
-)
-
-# Install missing packages
-installed <- rownames(installed.packages())
-to_install <- setdiff(packages, installed)
-
-if(length(to_install) > 0){
-  install.packages(to_install, dependencies = TRUE)
-}
-
-# Load all packages
-invisible(lapply(packages, library, character.only = TRUE))
-
 # Load necessary packages
 library(here) # current directory
 library(dplyr) # dataframe manipulation
@@ -52,6 +32,7 @@ library(tidyr)
 library(pheatmap)
 library(stringr)
 library(see)
+library(ggnewscale)
 
 ##########################
 # Include custom functions

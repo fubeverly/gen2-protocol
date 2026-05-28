@@ -88,18 +88,46 @@ CFU <- read_excel(paste0(here(), "/1-data/Spatial-seq-CFU.xlsx"), sheet = 1) %>%
 CFU <- CFU %>% mutate(Subject = recode(Subject, "KD39" = "Subject 1",
                                          "KD40" = "Subject 2"))
 
-g <- ggplot(CFU, aes(x = Region, y = log10(CFU_plot), fill = pH)) +
+g <- ggplot(CFU, aes(x = Region, y = log10(CFU_mL), fill = pH)) +
      geom_bar(stat = "identity", color = "black", linewidth = 0.25) +
      scale_fill_manual(values = colors_pH) +
+     new_scale_fill() +
+     geom_point(aes(y = log10(Avg_cell_count), fill = Avg_live_percent), 
+                shape = 23, color = "black", size = 2) +
+     scale_fill_gradient(low = "white", high = "#0000FF", 
+                        limits = c(0, 100), name = "Percent alive") +
      scale_y_log10() +
      facet_wrap(~Subject, ncol = 1, scales = "free") +
-     scale_y_continuous(breaks = c(3, 7, 11), labels = scales::label_math(10^.x)) +  # 10^10 format
+     scale_y_continuous(breaks = c(1, 3, 5, 7, 9, 11), labels = scales::label_math(10^.x)) +  # 10^10 format
      labs(y = expression(log[10](CFU/mL))) +
      theme_custom_comp() +
      theme(axis.text.x = element_text(angle = 0)) +
      theme_custom_text()
 
 ggsave(paste0(directory, "Fig5/Fig5C.pdf"), plot = g, device = "pdf", width = 2.2, height = 2.5)
+
+g <- ggplot(CFU, aes(x = Region, y = log10(CFU_mL), fill = pH)) +
+     geom_bar(stat = "identity", color = "black", linewidth = 0.25) +
+     scale_fill_manual(values = colors_pH) +
+     new_scale_fill() +
+     geom_point(aes(y = log10(Avg_cell_count), fill = Avg_live_percent), 
+                shape = 23, color = "black", size = 2) +
+     scale_fill_gradient(low = "white", high = "#0000FF", 
+                        limits = c(0, 100), name = "Percent alive") +
+     scale_y_log10() +
+     facet_wrap(~Subject, ncol = 1, scales = "free") +
+     scale_y_continuous(breaks = c(1, 3, 5, 7, 9, 11), labels = scales::label_math(10^.x)) +  # 10^10 format
+     labs(y = expression(log[10](CFU/mL))) +
+     theme(axis.text.x = element_text(angle = 0)) +
+     theme_custom_text() +
+     guides(fill = guide_colorbar(frame.colour = "black", 
+                                   frame.linewidth = 0.2,
+                                   ticks.colour = "black",
+                                   ticks.linewidth = 0.2))
+
+legend <- get_legend(g)
+
+ggsave(paste0(directory, "Fig5/Fig5C_legend.pdf"), plot = legend, device = pdf, width = 6, height = 5)
 ```
 
 #######################################
